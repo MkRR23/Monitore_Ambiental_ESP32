@@ -54,16 +54,16 @@ Este proyecto captura datos ambientales cada 10 segundos usando un microcontrola
 
 ## 🗂️ Estructura del proyecto
 monitoreo-ambiental-esp32/
-│
+
+
 ├── esp32/
 │   ├── MonitoreoAmbiental.ino
-│ 
-│
+
 ├── servidor/
 │   ├── API.php
 │   ├── getData.php
 │   └── db_config.example.php  ← Copia como db_config.php y agrega tus datos
-│
+
 ├── dashboard/
     └── dashboard.html
 
