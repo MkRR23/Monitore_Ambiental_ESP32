@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>ESP Monitor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;800&display=swap"
+    rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0a0c0f;
+      --surface: #111418;
+      --border: #1e2530;
+      --accent: #00e5ff;
+      --temp: #ff6b35;
+      --hum: #00e5ff;
+      --co2: #7fff6e;
+      --muted: #3a4455;
+      --text: #cdd6e8;
+      --dim: #5a6880;
+      --danger: #ff4060;
+      --mono: 'Share Tech Mono', monospace;
+      --sans: 'Syne', sans-serif;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 229, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 229, 255, 0.025) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* HEADER */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10, 12, 15, 0.92);
+      backdrop-filter: blur(12px);
+      gap: 12px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      border: 2px solid var(--accent);
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.25);
+    }
+
+    .logo-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .logo h1 {
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #fff;
+    }
+
+    .logo span {
+      color: var(--accent);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--dim);
+      padding: 5px 10px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--co2);
+      box-shadow: 0 0 5px var(--co2);
+      animation: pulse 2s infinite;
+    }
+
+    .dot.offline {
+      background: var(--danger);
+      box-shadow: 0 0 5px var(--danger);
+      animation: none;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: .35
+      }
+    }
+
+    #last-update {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--dim);
+      white-space: nowrap;
+    }
+
+    /* TABS */
+    .nav-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 12px 20px 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      position: relative;
+      z-index: 1;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .nav-tabs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tab-btn {
+      font-family: var(--sans);
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--dim);
+      background: none;
+      border: none;
+      padding: 8px 16px 10px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color .2s, border-color .2s;
+      white-space: nowrap;
+    }
+
+    .tab-btn:hover {
+      color: var(--text);
+    }
+
+    .tab-btn.active {
+      color: #fff;
+      border-bottom-color: var(--accent);
+    }
+
+    /* MAIN */
+    main {
+      position: relative;
+      z-index: 1;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px 16px 60px;
+    }
+
+    .panel {
+      display: none;
+    }
+
+    .panel.active {
+      display: block;
+      animation: fadeUp .35s ease both;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* METRIC CARDS */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    @media (min-width: 640px) {
+      .metrics-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+      transition: transform .2s, border-color .2s;
+    }
+
+    .metric-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--c);
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--c);
+      box-shadow: 0 0 10px var(--c);
+    }
+
+    .metric-card.temp {
+      --c: var(--temp);
+    }
+
+    .metric-card.hum {
+      --c: var(--hum);
+    }
+
+    .metric-card.co2 {
+      --c: var(--co2);
+    }
+
+    .metric-card.time {
+      --c: var(--muted);
+    }
+
+    .metric-label {
+      font-size: 0.6rem;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--dim);
+      margin-bottom: 8px;
+    }
+
+    .metric-value {
+      font-family: var(--mono);
+      font-size: 1.6rem;
+      color: #fff;
+      line-height: 1;
+    }
+
+    .metric-value .unit {
+      font-size: 0.8rem;
+      color: var(--dim);
+      margin-left: 2px;
+    }
+
+    .metric-sub {
+      margin-top: 6px;
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      color: var(--dim);
+    }
+
+    @media (min-width: 640px) {
+      .metric-value {
+        font-size: 2rem;
+      }
+    }
+
+    /* CONTROLES */
+    .controls-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .section-title {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+
+    .controls-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    select,
+    button {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 11px;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      -webkit-appearance: none;
+    }
+
+    select:hover,
+    button:hover {
+      border-color: var(--accent);
+      background: #151a22;
+    }
+
+    select option {
+      background: var(--surface);
+    }
+
+    button.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: 0 0 8px rgba(0, 229, 255, .15);
+    }
+
+    /* CHARTS */
+    .charts-col {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 16px 9px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .chart-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+
+    .chart-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .chart-unit {
+      font-family: var(--mono);
+      font-size: .65rem;
+      color: var(--dim);
+    }
+
+    .chart-body {
+      padding: 14px 14px 12px;
+    }
+
+    .chart-body canvas {
+      width: 100% !important;
+    }
+
+    .chart-mini canvas {
+      max-height: 110px;
+    }
+
+    .chart-full canvas {
+      max-height: 260px;
+    }
+
+    /* MINI CHARTS GRID (resumen) */
+    .mini-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    @media (min-width: 700px) {
+      .mini-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    /* TABLA */
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+      max-height: 460px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .table-scroll::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+
+    .table-scroll::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+
+    .table-scroll::-webkit-scrollbar-thumb {
+      background: var(--muted);
+      border-radius: 3px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 0.77rem;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+
+    thead tr {
+      background: #0d1017;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      padding: 12px 16px;
+      text-align: left;
+      font-family: var(--sans);
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--dim);
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      transition: color .2s;
+    }
+
+    th:hover {
+      color: var(--accent);
+    }
+
+    th.sorted {
+      color: var(--accent);
+    }
+
+    .sort-icon {
+      margin-left: 4px;
+      opacity: .45;
+    }
+
+    th.sorted .sort-icon {
+      opacity: 1;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid rgba(30, 37, 48, .6);
+      transition: background .15s;
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    tbody tr:hover {
+      background: rgba(0, 229, 255, .04);
+    }
+
+    td {
+      padding: 10px 16px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    td.num {
+      color: #fff;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+    }
+
+    .badge-temp {
+      background: rgba(255, 107, 53, .12);
+      color: var(--temp);
+      border: 1px solid rgba(255, 107, 53, .2);
+    }
+
+    .badge-hum {
+      background: rgba(0, 229, 255, .08);
+      color: var(--hum);
+      border: 1px solid rgba(0, 229, 255, .15);
+    }
+
+    .badge-co2 {
+      background: rgba(127, 255, 110, .08);
+      color: var(--co2);
+      border: 1px solid rgba(127, 255, 110, .15);
+    }
+
+    .empty-state {
+      padding: 50px 20px;
+      text-align: center;
+      color: var(--dim);
+      font-family: var(--mono);
+      font-size: 0.82rem;
+    }
+
+    .empty-state .icon {
+      font-size: 1.8rem;
+      margin-bottom: 8px;
+      opacity: .4;
+    }
+
+    .table-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 16px;
+      border-top: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 0.67rem;
+      color: var(--dim);
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    /* MOBILE */
+    @media (max-width: 480px) {
+      header {
+        padding: 10px 14px;
+      }
+
+      #last-update {
+        display: none;
+      }
+
+      main {
+        padding: 14px 10px 50px;
+      }
+
+      .metric-value {
+        font-size: 1.35rem;
+      }
+
+      th,
+      td {
+        padding: 9px 10px;
+        font-size: 0.7rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4" />
+          <circle cx="12" cy="12" r="4" />
+        </svg>
+      </div>
+      <h1>ESP<span>Monitor</span></h1>
+    </div>
+    <div class="header-right">
+      <div class="status-pill">
+        <div class="dot" id="status-dot"></div>
+        <span id="status-text">Conectando…</span>
+      </div>
+      <div id="last-update">—</div>
+    </div>
+  </header>
+
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab('overview',this)">Resumen</button>
+    <button class="tab-btn" onclick="switchTab('charts',this)">Gráficas</button>
+    <button class="tab-btn" onclick="switchTab('table',this)">Tabla</button>
+  </div>
+
+  <main>
+
+    <!-- RESUMEN -->
+    <div class="panel active" id="panel-overview">
+      <div style="height:10px"></div>
+
+      <div class="metrics-grid">
+        <div class="metric-card temp">
+          <div class="metric-label">Temperatura</div>
+          <div class="metric-value" id="card-temp">—<span class="unit">°C</span></div>
+          <div class="metric-sub" id="card-temp-sub">—</div>
+        </div>
+        <div class="metric-card hum">
+          <div class="metric-label">Humedad</div>
+          <div class="metric-value" id="card-hum">—<span class="unit">%</span></div>
+          <div class="metric-sub" id="card-hum-sub">—</div>
+        </div>
+        <div class="metric-card co2">
+          <div class="metric-label">CO₂</div>
+          <div class="metric-value" id="card-co2">—<span class="unit">ppm</span></div>
+          <div class="metric-sub" id="card-co2-sub">—</div>
+        </div>
+        <div class="metric-card time">
+          <div class="metric-label">Último dato</div>
+          <div class="metric-value" id="card-time" style="font-size:1.05rem;padding-top:6px;">—</div>
+          <div class="metric-sub" id="card-date">—</div>
+        </div>
+      </div>
+
+      <div class="mini-grid">
+        <div class="chart-card chart-mini">
+          <div class="chart-header">
+            <div class="chart-title">
+              <div class="chart-dot" style="background:var(--temp);box-shadow:0 0 5px var(--temp)"></div>Temperatura
+            </div>
+          </div>
+          <div class="chart-body"><canvas id="chart-temp-mini"></canvas></div>
+        </div>
+        <div class="chart-card chart-mini">
+          <div class="chart-header">
+            <div class="chart-title">
+              <div class="chart-dot" style="background:var(--hum);box-shadow:0 0 5px var(--hum)"></div>Humedad
+            </div>
+          </div>
+          <div class="chart-body"><canvas id="chart-hum-mini"></canvas></div>
+        </div>
+        <div class="chart-card chart-mini">
+          <div class="chart-header">
+            <div class="chart-title">
+              <div class="chart-dot" style="background:var(--co2);box-shadow:0 0 5px var(--co2)"></div>CO₂
+            </div>
+          </div>
+          <div class="chart-body"><canvas id="chart-co2-mini"></canvas></div>
+        </div>
+      </div>
+
+      <div class="controls-bar">
+        <span class="section-title">Configuración</span>
+        <div class="controls-right">
+          <select id="limit-select-ov">
+            <option value="25">25 registros</option>
+            <option value="50" selected>50 registros</option>
+            <option value="100">100 registros</option>
+            <option value="200">200 registros</option>
+          </select>
+          <button id="refresh-btn" onclick="fetchData()">↻ Actualizar</button>
+          <button id="auto-btn" onclick="toggleAuto()">Auto OFF</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GRÁFICAS -->
+    <div class="panel" id="panel-charts">
+      <div style="height:12px"></div>
+      <div class="charts-col">
+
+        <div class="chart-card chart-full">
+          <div class="chart-header">
+            <div class="chart-title">
+              <div class="chart-dot" style="background:var(--temp);box-shadow:0 0 6px var(--temp)"></div>Temperatura
+            </div>
+            <span class="chart-unit">°C</span>
+          </div>
+          <div class="chart-body"><canvas id="chart-temp-full"></canvas></div>
+        </div>
+
+        <div class="chart-card chart-full">
+          <div class="chart-header">
+            <div class="chart-title">
+              <div class="chart-dot" style="background:var(--hum);box-shadow:0 0 6px var(--hum)"></div>Humedad Relativa
+            </div>
+            <span class="chart-unit">%</span>
+          </div>
+          <div class="chart-body"><canvas id="chart-hum-full"></canvas></div>
+        </div>
+
+        <div class="chart-card chart-full">
+          <div class="chart-header">
+            <div class="chart-title">
+              <div class="chart-dot" style="background:var(--co2);box-shadow:0 0 6px var(--co2)"></div>CO₂
+            </div>
+            <span class="chart-unit">ppm</span>
+          </div>
+          <div class="chart-body"><canvas id="chart-co2-full"></canvas></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TABLA -->
+    <div class="panel" id="panel-table">
+      <div style="height:12px"></div>
+      <div class="controls-bar">
+        <span class="section-title">Historial</span>
+        <div class="controls-right">
+          <select id="limit-select-tb">
+            <option value="25">25 registros</option>
+            <option value="50" selected>50 registros</option>
+            <option value="100">100 registros</option>
+            <option value="200">200 registros</option>
+          </select>
+          <button onclick="fetchData()">↻ Actualizar</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th onclick="sortTable('_idx')"># <span class="sort-icon">↕</span></th>
+                <th onclick="sortTable('fecha')">Fecha <span class="sort-icon">↕</span></th>
+                <th onclick="sortTable('hora')">Hora <span class="sort-icon">↕</span></th>
+                <th onclick="sortTable('temperatura')">Temp. <span class="sort-icon">↕</span></th>
+                <th onclick="sortTable('humedad')">Humedad <span class="sort-icon">↕</span></th>
+                <th onclick="sortTable('CO2')">CO₂ <span class="sort-icon">↕</span></th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <tr>
+                <td colspan="6">
+                  <div class="empty-state">
+                    <div class="icon">⏳</div>Cargando…
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span id="footer-count">0 registros</span>
+          <span id="footer-range">—</span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // CONFIG
+    const API_URL = 'http://YOUR_LOCAL_IP/getData.php'; // Replace with your local IP and ensure getData.php is in the same folder
+    let allData = [], sortCol = '_idx', sortDir = -1;
+    let autoTimer = null, autoOn = false;
+    const charts = {};
+
+    // TABS
+    function switchTab(name, el) {
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('panel-' + name).classList.add('active');
+      el.classList.add('active');
+      // Redibujar charts al activar ese panel
+      if ((name === 'charts' || name === 'overview') && allData.length) renderCharts();
+    }
+
+    // FETCH
+    async function fetchData() {
+      const limit = Math.max(
+        parseInt(document.getElementById('limit-select-ov').value),
+        parseInt(document.getElementById('limit-select-tb').value)
+      );
+      const btn = document.getElementById('refresh-btn');
+      if (btn) { btn.textContent = '↻ …'; btn.disabled = true; }
+
+      try {
+        const res = await fetch(`${API_URL}?limite=${limit}&_=${Date.now()}`);
+        const json = await res.json();
+        if (json.error) throw new Error(json.error);
+        allData = (json.data || []).map((r, i) => ({ ...r, _idx: i + 1 }));
+        updateCards();
+        renderCharts();
+        renderTable();
+        setStatus(true);
+      } catch (e) {
+        console.error(e);
+        setStatus(false);
+        document.getElementById('table-body').innerHTML = `
+      <tr><td colspan="6"><div class="empty-state">
+        <div class="icon">⚠️</div>
+        No se pudo conectar con la API.<br>
+        Verifica que XAMPP esté corriendo y getData.php esté en la misma carpeta.
+      </div></td></tr>`;
+      } finally {
+        if (btn) { btn.textContent = '↻ Actualizar'; btn.disabled = false; }
+        document.getElementById('last-update').textContent =
+          'Act. ' + new Date().toLocaleTimeString('es-MX');
+      }
+    }
+
+    // CARDS
+    function updateCards() {
+      if (!allData.length) return;
+      const last = allData[allData.length - 1];
+      document.getElementById('card-temp').innerHTML =
+        `${parseFloat(last.temperatura).toFixed(1)}<span class="unit">°C</span>`;
+      document.getElementById('card-hum').innerHTML =
+        `${parseFloat(last.humedad).toFixed(1)}<span class="unit">%</span>`;
+      document.getElementById('card-co2').innerHTML =
+        `${parseFloat(last.CO2).toFixed(0)}<span class="unit">ppm</span>`;
+      document.getElementById('card-time').textContent = last.hora || '—';
+      document.getElementById('card-date').textContent = last.fecha || '—';
+
+      const temps = allData.map(r => parseFloat(r.temperatura));
+      const hums = allData.map(r => parseFloat(r.humedad));
+      const co2s = allData.map(r => parseFloat(r.CO2));
+      document.getElementById('card-temp-sub').textContent =
+        `↓ ${Math.min(...temps).toFixed(1)}  ↑ ${Math.max(...temps).toFixed(1)} °C`;
+      document.getElementById('card-hum-sub').textContent =
+        `↓ ${Math.min(...hums).toFixed(1)}  ↑ ${Math.max(...hums).toFixed(1)} %`;
+      document.getElementById('card-co2-sub').textContent =
+        `↓ ${Math.min(...co2s).toFixed(0)}  ↑ ${Math.max(...co2s).toFixed(0)} ppm`;
+    }
+
+    // CHARTS
+    function buildChart(id, labels, values, color, unit, mini) {
+      const canvas = document.getElementById(id);
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+
+      const grad = ctx.createLinearGradient(0, 0, 0, mini ? 90 : 220);
+      grad.addColorStop(0, color + '44');
+      grad.addColorStop(1, color + '00');
+
+      charts[id] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            data: values,
+            borderColor: color,
+            borderWidth: mini ? 1.5 : 2,
+            pointRadius: mini ? 0 : (labels.length > 50 ? 0 : 3),
+            pointHoverRadius: mini ? 0 : 5,
+            pointBackgroundColor: color,
+            fill: true,
+            backgroundColor: grad,
+            tension: 0.38,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: mini ? { enabled: false } : {
+              backgroundColor: '#1a2130',
+              borderColor: '#2a3545', borderWidth: 1,
+              titleColor: '#cdd6e8', bodyColor: '#cdd6e8',
+              titleFont: { family: "'Share Tech Mono'", size: 11 },
+              bodyFont: { family: "'Share Tech Mono'", size: 11 },
+              padding: 10,
+              callbacks: { label: c => ` ${c.parsed.y.toFixed(2)} ${unit}` }
+            }
+          },
+          scales: {
+            x: {
+              ticks: {
+                display: !mini,
+                color: '#5a6880',
+                font: { family: "'Share Tech Mono'", size: 9 },
+                maxRotation: 40,
+                maxTicksLimit: window.innerWidth < 480 ? 5 : 8,
+              },
+              grid: { color: mini ? 'transparent' : 'rgba(30,37,48,0.6)' },
+              border: { color: '#1e2530' }
+            },
+            y: {
+              min: id.includes('temp') ? 0 : id.includes('hum') ? 10 : 100,
+              max: id.includes('temp') ? 100 : id.includes('hum') ? 80 : 5000,
+
+              ticks: {
+                color: '#5a6880',
+                font: { family: "'Share Tech Mono'", size: mini ? 9 : 10 },
+                maxTicksLimit: mini ? 3 : 6,
+                callback: v => v + (mini ? '' : ' ' + unit)
+              },
+
+              grid: { color: 'rgba(30,37,48,0.5)' },
+              border: { color: '#1e2530' }
+            }
+          }
+        }
+      });
+    }
+
+    function renderCharts() {
+      if (!allData.length) return;
+
+      // Reducir puntos en mobile
+      const maxPts = window.innerWidth < 480 ? 25 : 100;
+      let data = allData;
+      if (data.length > maxPts) {
+        const step = Math.ceil(data.length / maxPts);
+        data = data.filter((_, i) => i % step === 0 || i === data.length - 1);
+      }
+
+      const isMobile = window.innerWidth < 640;
+      const labels = data.map(r =>
+        isMobile ? r.hora.substring(0, 5)
+          : r.fecha.substring(5) + ' ' + r.hora.substring(0, 5)
+      );
+      const temps = data.map(r => parseFloat(r.temperatura));
+      const hums = data.map(r => parseFloat(r.humedad));
+      const co2s = data.map(r => parseFloat(r.CO2));
+
+      buildChart('chart-temp-mini', labels, temps, '#ff6b35', '°C', true);
+      buildChart('chart-hum-mini', labels, hums, '#00e5ff', '%', true);
+      buildChart('chart-co2-mini', labels, co2s, '#7fff6e', 'ppm', true);
+      buildChart('chart-temp-full', labels, temps, '#ff6b35', '°C', false);
+      buildChart('chart-hum-full', labels, hums, '#00e5ff', '%', false);
+      buildChart('chart-co2-full', labels, co2s, '#7fff6e', 'ppm', false);
+    }
+
+    // TABLA
+    function renderTable() {
+      const tbody = document.getElementById('table-body');
+      if (!allData.length) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="icon">📭</div>Sin datos.</div></td></tr>`;
+        return;
+      }
+      const sorted = [...allData].sort((a, b) => {
+        let va = a[sortCol], vb = b[sortCol];
+        if (sortCol === 'fecha' || sortCol === 'hora') { va = a.fecha + a.hora; vb = b.fecha + b.hora; }
+        if (typeof va === 'number') return (va - vb) * sortDir;
+        return va < vb ? sortDir : va > vb ? -sortDir : 0;
+      });
+      tbody.innerHTML = sorted.map((r, i) => `
+    <tr>
+      <td class="num">${i + 1}</td>
+      <td>${r.fecha}</td>
+      <td>${r.hora}</td>
+      <td><span class="badge badge-temp">${parseFloat(r.temperatura).toFixed(2)} °C</span></td>
+      <td><span class="badge badge-hum">${parseFloat(r.humedad).toFixed(2)} %</span></td>
+      <td><span class="badge badge-co2">${parseFloat(r.CO2).toFixed(0)} ppm</span></td>
+    </tr>`).join('');
+      document.getElementById('footer-count').textContent = `${allData.length} registros`;
+      if (allData.length) {
+        const f = allData[0], l = allData[allData.length - 1];
+        document.getElementById('footer-range').textContent =
+          `${f.fecha} ${f.hora} → ${l.fecha} ${l.hora}`;
+      }
+    }
+
+    function sortTable(col) {
+      sortDir = sortCol === col ? sortDir * -1 : -1;
+      sortCol = col;
+      document.querySelectorAll('th').forEach(t => t.classList.remove('sorted'));
+      const cols = ['_idx', 'fecha', 'hora', 'temperatura', 'humedad', 'CO2'];
+      document.querySelectorAll('th')[cols.indexOf(col)]?.classList.add('sorted');
+      renderTable();
+    }
+
+    // AUTO-REFRESH
+    function toggleAuto() {
+      autoOn = !autoOn;
+      const btn = document.getElementById('auto-btn');
+      if (autoOn) {
+        btn.textContent = 'Auto ON'; btn.classList.add('active');
+        autoTimer = setInterval(fetchData, 10000);
+      } else {
+        btn.textContent = 'Auto OFF'; btn.classList.remove('active');
+        clearInterval(autoTimer);
+      }
+    }
+
+    // STATUS
+    function setStatus(ok) {
+      document.getElementById('status-dot').classList.toggle('offline', !ok);
+      document.getElementById('status-text').textContent = ok ? 'En línea' : 'Sin conexión';
+    }
+
+    // SYNC SELECTS
+    document.getElementById('limit-select-ov').addEventListener('change', e => {
+      document.getElementById('limit-select-tb').value = e.target.value;
+      fetchData();
+    });
+    document.getElementById('limit-select-tb').addEventListener('change', e => {
+      document.getElementById('limit-select-ov').value = e.target.value;
+      fetchData();
+    });
+
+    // RESIZE
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => { if (allData.length) renderCharts(); }, 250);
+    });
+
+    // INIT
+    fetchData();
+  </script>
+</body>
+
+</html>
