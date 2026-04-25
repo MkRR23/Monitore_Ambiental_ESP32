@@ -60,9 +60,8 @@ monitoreo-ambiental-esp32/
 │   ├── MonitoreoAmbiental.ino
 
 ├── servidor/
-│   ├── API.php
-│   ├── getData.php
-│   └── db_config.example.php  ← Copia como db_config.php y agrega tus datos
+│   API.php
+│   getData.php
 
 ├── dashboard/
     └── dashboard.html
