@@ -116,7 +116,8 @@ const API_URL = 'http://TU_IP_LOCAL/getData.php';
 ### Acceso al dashboard
 
 Desde cualquier dispositivo en la misma red WiFi, abre en el navegador:
-http://TU_IP_LOCAL/dashboard/dashboard.html
+
+``http://TU_IP_LOCAL/dashboard/dashboard.html``
 
 
 ---
