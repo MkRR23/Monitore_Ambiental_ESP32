@@ -57,11 +57,11 @@ esp32:
   - MonitoreoAmbiental.ino
 
 servidor:
- -API.php
--getData.php
+- API.php
+- getData.php
  
  dashboard:
-  -dashboard.html
+ - dashboard.html
 ---
 
 ## ⚙️ Instalación
